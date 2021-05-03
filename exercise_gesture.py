@@ -1,15 +1,16 @@
-from tkinter import *
 import exercise_detection_controller
 import PIL.Image, PIL.ImageTk
 import config
 import sys
 import record_customized_motion
 import train_customized_model
-from tkinter import ttk
+import shutil
 import os
 from configparser import ConfigParser
 from time import time
-
+from tkinter import *
+from tkinter import ttk
+from tkinter import messagebox
 
 
 class ExerciseGesture:
@@ -38,12 +39,17 @@ class ExerciseGesture:
         self.stop_button = Button(self.controls_frame, image=self.stop_btn_img, borderwidth=0, command=self.stop)
         self.stop_button.pack(padx=3, side='left')
 
-        #self.test_button = Button(self.controls_frame, text='test', borderwidth=0, command=self.current_time)
-        #self.test_button.pack(padx=8, side='left')
+        # self.test_button = Button(self.controls_frame, text='test', borderwidth=0, command=self.current_time)
+        # self.test_button.pack(padx=8, side='left')
 
+        self.instructionLabel1 = Label(text='Press start button to start, press stop button to end the session and save'
+                                            ' the data.\nGo to Settings - Profile to change the current inputs.',
+                                       font=("Courier", 10))
+        self.instructionLabel1.config(anchor=CENTER)
+        self.instructionLabel1.pack()
         self.customizedOptions = next(os.walk("models/customized"))[1]
 
-        self.cameraOptions = ["Camera 0", "Camera 1", "Camera 2"]
+        self.cameraOptions = ["Camera 0", "Camera 1", "Camera 2", "debug"]
         self.cameraOption = StringVar()
         self.cameraOption.set(self.cameraOptions[0])
         self.cameraOption.trace("w", self.camera_changed)
@@ -68,10 +74,15 @@ class ExerciseGesture:
 
     def update(self):
         if (self.appStatus == 1 or self.appStatus == 2):
-            status, ret, frame = self.motionDetection.get_frame()
-            if ret:
-                self.photo = PIL.ImageTk.PhotoImage(PIL.Image.fromarray(frame))
-                self.canvas.create_image(0, 0, image=self.photo, anchor=NW)
+            try:
+                status, ret, frame = self.motionDetection.get_frame()
+                if ret:
+                    self.photo = PIL.ImageTk.PhotoImage(PIL.Image.fromarray(frame))
+                    self.canvas.create_image(0, 0, image=self.photo, anchor=NW)
+            except:
+                print("Error while trying to get frames.")
+                self.stop()
+
             self.window.after(self.delay, self.update)
 
         elif (self.appStatus == 0):
@@ -93,7 +104,7 @@ class ExerciseGesture:
         event.widget['background'] = 'light grey'
 
     def profile_window(self):
-        self.eventTypes = ["keypress", "mouse","brightness"]
+        self.eventTypes = ["keypress", "mouse", "brightness"]
         self.mouseEvents = ["click", "move-left", "move-right", "move-up", "move-down"]
 
         if (self.appStatus != 0):
@@ -139,12 +150,12 @@ class ExerciseGesture:
                 checkBoxVar.set(0)
             checkBox = Checkbutton(self.profileExerciseFrame, text=key, variable=checkBoxVar)
             checkBox.grid(sticky="W", row=rowCount, column=0, pady=5, padx=5)
-            if('+' in defaultExercisesDict.get(key)):
+            if ('+' in defaultExercisesDict.get(key)):
                 eventType = defaultExercisesDict.get(key).split('+')[0]
                 eventContent = defaultExercisesDict.get(key).split('+')[1]
             else:
                 eventType = defaultExercisesDict.get(key)
-                eventContent=None
+                eventContent = None
 
             eventTypeOption = StringVar()
             eventTypeOption.set(eventType)
@@ -188,12 +199,12 @@ class ExerciseGesture:
             checkBox = Checkbutton(self.profileExerciseFrame, text=key, variable=checkBoxVar)
             checkBox.grid(sticky="W", row=rowCount, column=0, pady=5, padx=5)
 
-            if('+' in customizedExerciseDict.get(key)):
+            if ('+' in customizedExerciseDict.get(key)):
                 eventType = customizedExerciseDict.get(key).split('+')[0]
                 eventContent = customizedExerciseDict.get(key).split('+')[1]
             else:
                 eventType = customizedExerciseDict.get(key)
-                eventContent=''
+                eventContent = ''
 
             eventTypeOption = StringVar()
             eventTypeOption.set(eventType)
@@ -224,7 +235,6 @@ class ExerciseGesture:
             elif eventType == "brightness":
                 self.customizedProfiles.append((checkBoxVar, checkBox, eventTypeOption))
             rowCount += 1
-
 
         addNewCustomizedButton = Button(self.profileExerciseFrame, text="Add a new customized exercise",
                                         command=self.add_customized_motion_window)
@@ -274,16 +284,14 @@ class ExerciseGesture:
             checkBox = Checkbutton(self.profileExtremityFrame, text=key, variable=checkBoxVar)
             checkBox.grid(sticky="W", row=rowCount, column=0, pady=5, padx=5)
 
-            if(len(extremityTriggersDict.get(key).split('+'))==3):
+            if (len(extremityTriggersDict.get(key).split('+')) == 3):
                 pos = extremityTriggersDict.get(key).split('+')[0]
                 eventType = extremityTriggersDict.get(key).split('+')[1]
                 eventContent = extremityTriggersDict.get(key).split('+')[2]
             else:
                 pos = extremityTriggersDict.get(key).split('+')[0]
                 eventType = extremityTriggersDict.get(key).split('+')[1]
-                eventContent=''
-
-
+                eventContent = ''
 
             posLabel = Label(self.profileExtremityFrame, text=pos, background='light grey')
             posLabel.grid(sticky="W", row=rowCount, column=1, pady=5, padx=5)
@@ -314,7 +322,7 @@ class ExerciseGesture:
                 mouseEventTypeOptionMenu.grid(row=rowCount, column=3, pady=5, padx=0)
                 self.extremityProfiles.append((checkBoxVar, checkBox, posLabel, eventTypeOption, mouseEventOption))
             elif eventType == "brightness":
-                self.extremityProfiles.append((checkBoxVar, checkBox, posLabel,eventTypeOption))
+                self.extremityProfiles.append((checkBoxVar, checkBox, posLabel, eventTypeOption))
             rowCount += 1
 
         addNewExtremityButton = Button(self.profileExtremityFrame, text="Add a new extremity trigger",
@@ -328,6 +336,11 @@ class ExerciseGesture:
         self.profileNotebook.add(self.profileExerciseFrame, text="Exercise")
         self.profileNotebook.add(self.profileExtremityFrame, text="Extremity")
 
+        self.instructionLabel2 = Label(profileSettingsFrame,
+                                       text='Click APPLY to save the settings.\nClick \'X\' on the upper right corner to close'
+                                            ' the page.', font=("Courier", 10))
+        self.instructionLabel2.config(anchor=CENTER)
+        self.instructionLabel2.pack()
         apply_button = Button(profileSettingsFrame, text="APPLY", command=self.apply_profile).pack()
 
     def default_event_type_changed(self, eventTypeOptionInstance, row, *args):
@@ -353,10 +366,9 @@ class ExerciseGesture:
     def customized_event_type_changed(self, eventTypeOptionInstance, row, *args):
         index = 0
         count = 0
-        print(self.customizedProfiles)
+        # print(self.customizedProfiles)
         for profile in self.customizedProfiles:
-            print(profile)
-            if profile[3] == eventTypeOptionInstance:
+            if profile[2] == eventTypeOptionInstance:
                 if eventTypeOptionInstance.get() == "mouse":
                     mouseEventOption = StringVar()
                     mouseEventOption.set(self.mouseEvents[0])
@@ -412,7 +424,7 @@ class ExerciseGesture:
     def add_extremity(self):
         config = ConfigParser()
         config.read('config.ini')
-        config.set('extremity', self.addExtremityEntry.get(), '(0,0)-w')
+        config.set('extremity', self.addExtremityEntry.get(), '(0,0)+keypress+w')
         with open('config.ini', 'w') as f:
             config.write(f)
 
@@ -495,20 +507,23 @@ class ExerciseGesture:
         config.read('config.ini')
         for item in config.items('customized'):
             if item[0] == self.customizedExercisesOption.get():
-                print("here")
-                print(item[0])
                 config.remove_option('customized', item[0])
                 config.write(open('config.ini', 'w'))
 
         inputs = ConfigParser()
         inputs.read('current_inputs.ini')
-        for item in config.items('customized'):
-            if item[0] == self.extremityOption.get():
+        for item in inputs.items('customized'):
+            print(item[0])
+            if item[0] == self.customizedExercisesOption.get():
                 inputs.remove_option('customized', item[0])
                 inputs.write(open('current_inputs.ini', 'w'))
 
+        dirpath = "models/customized/" + self.customizedExercisesOption.get()
+        if os.path.exists(dirpath) and os.path.isdir(dirpath):
+            shutil.rmtree(dirpath)
         self.removeCustomizedMotionWindow.destroy()
-        self.remove_customized_motion_window()
+        self.profileWindow.destroy()
+        self.profile_window()
 
     def apply_profile(self):
         config = ConfigParser()
@@ -520,8 +535,7 @@ class ExerciseGesture:
             if profile[2].get() == "mouse":
                 config.set('default', profile[1]['text'], profile[2].get() + '+' + profile[3].get())
                 config.write(open('config.ini', 'w'))
-            elif profile[2].get()=="keypress":
-                # print(profile)
+            elif profile[2].get() == "keypress":
                 config.set('default', profile[1]['text'], profile[2].get() + '+' + profile[3]['text'])
                 config.write(open('config.ini', 'w'))
             else:
@@ -538,7 +552,7 @@ class ExerciseGesture:
             if profile[2].get() == "mouse":
                 config.set('customized', profile[1]['text'], profile[2].get() + '+' + profile[3].get())
                 config.write(open('config.ini', 'w'))
-            elif profile[2].get()=="keypress":
+            elif profile[2].get() == "keypress":
                 # print(profile)
                 config.set('customized', profile[1]['text'], profile[2].get() + '+' + profile[3]['text'])
                 config.write(open('config.ini', 'w'))
@@ -574,7 +588,6 @@ class ExerciseGesture:
         self.profileWindow.destroy()
         self.profile_window()
 
-
     def key_map(self, event):
         event.widget['text'] = "???"
         event.widget['background'] = "green"
@@ -596,7 +609,6 @@ class ExerciseGesture:
         change_trigger_pos_window = Toplevel(self.window)
         change_trigger_pos_window.resizable(False, False)
         change_trigger_pos_window.geometry("720x480+100+100")
-        # change_trigger_pos_window.configure(bg='black')
         pos = tuple(map(int, event.widget['text'][1:-1].split(',')))
         x = pos[0]
         y = pos[1]
@@ -628,7 +640,7 @@ class ExerciseGesture:
 
         self.configButton = Button(self.configFrame, text="Start Initial Configuration",
                                    command=self.start_initial_configuration)
-        self.configButton.pack(padx=3, side='right')
+        self.configButton.pack(padx=3)
 
     def start_initial_configuration(self):
         self.configWindow.destroy()
@@ -660,8 +672,8 @@ class ExerciseGesture:
         self.customizedMotionWindow.geometry("420x260+100+100")
         self.customizedMotionWindow.resizable(False, False)
         self.customizedMotionTextLabel1 = Label(self.customizedMotionWindow,
-                                               text="Please enter the exercise name",
-                                               wraplengt=330, justify=LEFT)
+                                                text="Please enter the exercise name, note the name should not contain space.",
+                                                wraplengt=330, justify=LEFT)
         self.customizedMotionTextLabel1.pack()
         self.customizedMotionEntry = Entry(self.customizedMotionWindow)
         self.customizedMotionEntry.pack()
@@ -669,8 +681,8 @@ class ExerciseGesture:
                                              command=self.create_customized_motion_1)
         self.customizedMotionButton.pack(padx=10)
         self.customizedMotionTextLabel2 = Label(self.customizedMotionWindow,
-                                               text="Note: A video of you doing the exercise will be taken first, followed by a second video of you not doing the exercise.",
-                                               wraplengt=330, justify=LEFT)
+                                                text="Note: A video of you doing the exercise will be taken first, followed by a second video of you not doing the exercise.",
+                                                wraplengt=330, justify=LEFT)
         self.customizedMotionTextLabel2.pack(pady=10)
 
     def create_customized_motion_1(self):
@@ -684,8 +696,9 @@ class ExerciseGesture:
 
     def create_customized_motion_0(self):
         if (self.newCustomizedMotion.record(0)):
-            self.customizedMotionTextLabel1["text"] = "Motion recorded successfully! Training might take a couple of minutes." \
-                                                  "Please reopen the profile page after the training is completed."
+            self.customizedMotionTextLabel1[
+                "text"] = "Motion recorded successfully! Training might take a couple of minutes." \
+                          "Please reopen the profile page after the training is completed."
             self.customizedMotionButton["text"] = "Start training your model! "
             self.customizedMotionButton["command"] = self.train_model
 
@@ -711,39 +724,39 @@ class ExerciseGesture:
     def start(self):
         self.timerLabel = Label(self.controls_frame, text='3', font=('Helvetica', 18, 'bold'))
         self.timerLabel.pack()
-        self.timerLabel.after(1000,self.timer_count_down)
+        self.timerLabel.after(1000, self.timer_count_down)
 
     def count_down_complete(self):
         if (self.motionDetection == None):
             self.motionDetection = exercise_detection_controller.ExerciseDetectionController(self.cameraOption.get())
-            if not self.motionDetection.get_config_settings():
-                print("no config detected")
-                return
-        try:
             self.motionDetection.isDetecting = True
-        except:
-            print("motionDetection Instance not created")
+            if not self.motionDetection.get_config_settings():
+                messagebox.showinfo("No Initial Configuratio Detected",
+                                    "Please complete the initial configuration first")
+                self.stop()
+                return
         self.appStatus = 1
 
     def create_target_coordinates(self, event):
         self.motionDetection.targets.append((event.x, event.y))
 
     def stop(self):
-        #self.motionDetection.testingLog.close()k
-        self.motionDetection.__del__()
-        self.motionDetection = None
+        # self.motionDetection.testingLog.close()
+        self.appStatus = 0
+        if self.motionDetection != None:
+            self.motionDetection.__del__()
+            self.motionDetection = None
         self.isDetecting = False
         self.start_button['image'] = self.start_btn_img
         self.start_button['command'] = self.start
-        self.appStatus = 0
 
     def motion_type_changed(self, *args):
         if (self.appStatus == 1 or self.appStatus == 2):
             self.stop()
 
     def timer_count_down(self):
-        if int(self.timerLabel['text'])>0:
-            self.timerLabel.config(text=str(int(self.timerLabel['text'])-1))
+        if int(self.timerLabel['text']) > 0:
+            self.timerLabel.config(text=str(int(self.timerLabel['text']) - 1))
             self.timerLabel.after(1000, self.timer_count_down)
         else:
             self.timerLabel.destroy()
@@ -755,12 +768,11 @@ class ExerciseGesture:
 
     def exit(self):
         self.cleanup_mei()
+        self.window.destroy()
         sys.exit()
 
     def cleanup_mei(self):
-    #Code from https://github.com/pyinstaller/pyinstaller/issues/2379
-        import sys
-        import os
+        # Code from https://github.com/pyinstaller/pyinstaller/issues/2379
         from shutil import rmtree
 
         mei_bundle = getattr(sys, "_MEIPASS", False)
@@ -773,4 +785,6 @@ class ExerciseGesture:
                         rmtree(os.path.join(dir_mei, file))
                     except PermissionError:  # mainly to allow simultaneous pyinstaller instances
                         pass
+
+
 ExerciseGesture(Tk(), "ExerciseModule")

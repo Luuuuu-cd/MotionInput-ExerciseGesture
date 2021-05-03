@@ -10,36 +10,20 @@ import matplotlib
 import matplotlib.pyplot as plt
 import time
 import pandas as pd
-matplotlib.style.use('ggplot')
+import PIL.Image
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-import PIL.Image
+
+matplotlib.style.use('ggplot')
 
 
-
-# custom dataset
 class ImageDataset(Dataset):
     def __init__(self, images, labels=None, tfms=None):
         self.X = images
         self.y = labels
-        # apply augmentations
-        if tfms == 0:  # if validating
-            self.aug = albumentations.Compose([
-                albumentations.Resize(224, 224, always_apply=True),
-            ])
-        else:  # if training
-            self.aug = albumentations.Compose([
-                albumentations.Resize(224, 224, always_apply=True),
-                albumentations.HorizontalFlip(p=0.5),
-                albumentations.ShiftScaleRotate(
-                    shift_limit=0.3,
-                    scale_limit=0.3,
-                    rotate_limit=15,
-                    p=0.5
-                ),
-            ])
+        self.aug = albumentations.Compose([albumentations.Resize(224, 224, always_apply=True)])
 
     def __len__(self):
         return (len(self.X))
@@ -50,48 +34,42 @@ class ImageDataset(Dataset):
         image = self.aug(image=np.array(image))['image']
         image = np.transpose(image, (2, 0, 1)).astype(np.float32)
         label = self.y[i]
-        return (torch.tensor(image, dtype=torch.float), torch.tensor(label, dtype=torch.long))
-
-
+        return torch.tensor(image, dtype=torch.float), torch.tensor(label, dtype=torch.long)
 
 class CustomizedModel:
-    def __init__(self,motionType):
-        self.motionType=motionType
+    def __init__(self, motionType):
+        self.motionType = motionType
         self.prepare_data()
         self.lr = 1e-3
         self.batch_size = 32
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.lb=joblib.load('models/customized/'+self.motionType+'/outputs/lb_'+self.motionType+'.pkl')
+        self.lb = joblib.load('models/customized/' + self.motionType + '/outputs/lb_' + self.motionType + '.pkl')
         self.model = cnn_models.CustomCNN(self.lb).to(self.device)
 
-        self.epochs=75
-        self.epoch=0
+        self.epochs = 75
+        self.epoch = 0
 
-        # read the data.csv file and get the image paths and labels
-        df = pd.read_csv('models/customized/'+self.motionType+'/input/data_'+self.motionType+'.csv')
-        X = df.image_path.values  # image paths
-        y = df.target.values  # targets
-        (xtrain, xtest, ytrain, ytest) = train_test_split(X, y,
-                                                          test_size=0.10, random_state=42)
+        df = pd.read_csv('models/customized/' + self.motionType + '/input/data_' + self.motionType + '.csv')
+        X = df.image_path.values
+        y = df.target.values
+        (xtrain, xtest, ytrain, ytest) = train_test_split(X, y, test_size=0.10, random_state=42)
         print(f"Training instances: {len(xtrain)}")
         print(f"Validation instances: {len(xtest)}")
 
         self.train_data = ImageDataset(xtrain, ytrain, tfms=1)
         self.test_data = ImageDataset(xtest, ytest, tfms=0)
-        # dataloaders
+
         self.trainloader = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True)
         self.testloader = DataLoader(self.test_data, batch_size=self.batch_size, shuffle=False)
 
-        # total parameters and trainable parameters
         total_params = sum(p.numel() for p in self.model.parameters())
         print(f"{total_params:,} total parameters.")
         total_trainable_params = sum(
             p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"{total_trainable_params:,} training parameters.")
 
-        # optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        # loss function
+
         self.criterion = nn.CrossEntropyLoss()
 
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -103,11 +81,9 @@ class CustomizedModel:
             verbose=True
         )
 
-
     def prepare_data(self):
-        # get all the image folder paths
-        all_paths = os.listdir('models/customized/'+self.motionType+'/input/')
-        folder_paths = [x for x in all_paths if os.path.isdir('models/customized/'+self.motionType+'/input/' + x)]
+        all_paths = os.listdir('models/customized/' + self.motionType + '/input/')
+        folder_paths = [x for x in all_paths if os.path.isdir('models/customized/' + self.motionType + '/input/' + x)]
         print(f"Folder paths: {folder_paths}")
         print(f"Number of folders: {len(folder_paths)}")
 
@@ -121,17 +97,17 @@ class CustomizedModel:
         for i, folder_path in tqdm(enumerate(folder_paths), total=len(folder_paths)):
             if folder_path not in create_labels:
                 continue
-            image_paths = os.listdir('models/customized/'+self.motionType+'/input/' + folder_path)
+            image_paths = os.listdir('models/customized/' + self.motionType + '/input/' + folder_path)
             label = folder_path
 
             for image_path in image_paths:
                 if image_path.split('.')[-1] in image_formats:
-                    data.loc[counter, 'image_path'] = f"models/customized/"+self.motionType+f"/input/{folder_path}/{image_path}"
+                    data.loc[
+                        counter, 'image_path'] = f"models/customized/" + self.motionType + f"/input/{folder_path}/{image_path}"
                     labels.append(label)
                     counter += 1
 
         labels = np.array(labels)
-
         lb = LabelBinarizer()
         labels = lb.fit_transform(labels)
 
@@ -144,22 +120,18 @@ class CustomizedModel:
                 index = np.argmax(labels[i])
                 data.loc[i, 'target'] = int(index)
 
-
         data = data.sample(frac=1).reset_index(drop=True)
         print(f"Number of labels or classes: {len(lb.classes_)}")
         print(f"The first one hot encoded labels: {labels[0]}")
         print(f"Mapping the first one hot encoded label to its category: {lb.classes_[0]}")
         print(f"Total instances: {len(data)}")
 
-
-        data.to_csv('models/customized/'+self.motionType+'/input/data_'+self.motionType+'.csv', index=False)
-
+        data.to_csv('models/customized/' + self.motionType + '/input/data_' + self.motionType + '.csv', index=False)
 
         print('Saving the binarized labels as pickled file')
-        joblib.dump(lb, 'models/customized/'+self.motionType+'/outputs/lb_'+self.motionType+'.pkl')
+        joblib.dump(lb, 'models/customized/' + self.motionType + '/outputs/lb_' + self.motionType + '.pkl')
 
         print(data.head(5))
-
 
     def fit(self):
         print('Training')
@@ -190,7 +162,8 @@ class CustomizedModel:
         val_running_loss = 0.0
         val_running_correct = 0
         with torch.no_grad():
-            for i, data in tqdm(enumerate(self.testloader), total=int(len(self.test_data) / self.testloader.batch_size)):
+            for i, data in tqdm(enumerate(self.testloader),
+                                total=int(len(self.test_data) / self.testloader.batch_size)):
                 data, target = data[0].to(self.device), data[1].to(self.device)
                 outputs = self.model(data)
                 loss = self.criterion(outputs, target)
@@ -205,14 +178,12 @@ class CustomizedModel:
 
             return val_loss, val_accuracy
 
-
-
     def train(self):
         train_loss, train_accuracy = [], []
         val_loss, val_accuracy = [], []
         start = time.time()
         for self.epoch in range(self.epochs):
-            print(f"Epoch {self.epoch + 1} of "+str(self.epochs))
+            print(f"Epoch {self.epoch + 1} of " + str(self.epochs))
             train_epoch_loss, train_epoch_accuracy = self.fit()
             val_epoch_loss, val_epoch_accuracy = self.validate()
             train_loss.append(train_epoch_loss)
@@ -223,15 +194,13 @@ class CustomizedModel:
         end = time.time()
         print(f"{(end - start) / 60:.3f} minutes")
 
-
         plt.figure(figsize=(10, 7))
         plt.plot(train_accuracy, color='green', label='train accuracy')
         plt.plot(val_accuracy, color='blue', label='validataion accuracy')
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.legend()
-        plt.savefig('models/customized/'+self.motionType+'/outputs/accuracy_'+self.motionType+'.png')
-        #plt.show()
+        plt.savefig('models/customized/' + self.motionType + '/outputs/accuracy_' + self.motionType + '.png')
 
         plt.figure(figsize=(10, 7))
         plt.plot(train_loss, color='orange', label='train loss')
@@ -239,22 +208,10 @@ class CustomizedModel:
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.legend()
-        plt.savefig('models/customized/'+self.motionType+'/outputs/loss_'+self.motionType+'.png')
-        #plt.show()
+        plt.savefig('models/customized/' + self.motionType + '/outputs/loss_' + self.motionType + '.png')
 
-        # serialize the model to disk
         print('Saving model...')
-        torch.save(self.model.state_dict(), 'models/customized/'+self.motionType+'/outputs/'+self.motionType+'.pth')
+        torch.save(self.model.state_dict(),
+                   'models/customized/' + self.motionType + '/outputs/' + self.motionType + '.pth')
 
         print('TRAINING COMPLETE')
-
-
-
-
-
-
-
-
-
-
-

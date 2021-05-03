@@ -1,9 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-# load the binarized labels file
-#lb = joblib.load('model/lb.pkl')
-
 class CustomCNN(nn.Module):
     def __init__(self,lb):
         super(CustomCNN, self).__init__()

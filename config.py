@@ -1,26 +1,20 @@
 import cv2
 import time
 from configparser import ConfigParser
-
 from win32api import GetSystemMetrics
 
 
 def takePhoto(video_source):
-    isPhotoTaken=False
+    isPhotoTaken = False
 
-    print("Hello, a photo of you will be captured in 10 seconds, please be prepared")
-
-    # SET THE COUNTDOWN TIMER
     TIMER = int(3)
 
     winname = "Config"
     cv2.namedWindow(winname)
     cv2.resizeWindow(winname, 720, 480)
-    cv2.moveWindow(winname,  int(GetSystemMetrics(0)/2-360), int(GetSystemMetrics(1)/2-240))
+    cv2.moveWindow(winname, int(GetSystemMetrics(0) / 2 - 360), int(GetSystemMetrics(1) / 2 - 240))
 
-    # Open the camera
     cap = cv2.VideoCapture(video_source)
-
 
     prev = time.time()
 
@@ -28,7 +22,7 @@ def takePhoto(video_source):
         if cv2.getWindowProperty(winname, 1) == -1:
             cap.release()
             cv2.destroyAllWindows()
-            return(isPhotoTaken)
+            return isPhotoTaken
         ret, img = cap.read()
         img = cv2.resize(img, (720, 480))
 
@@ -56,15 +50,14 @@ def takePhoto(video_source):
     cv2.imwrite("imgs/config.jpg", img)
     cap.release()
     cv2.destroyAllWindows()
-    isPhotoTaken=True
-    return (isPhotoTaken)
+    isPhotoTaken = True
+    return isPhotoTaken
 
 def selectROI():
     config = ConfigParser()
 
     config.read('config.ini')
     if not config.has_section('roi'):
-
         config.add_section('roi')
 
     winname = "SelectROI"
@@ -72,10 +65,9 @@ def selectROI():
     cv2.resizeWindow(winname, 720, 480)
     cv2.moveWindow(winname, int(GetSystemMetrics(0) / 2 - 360), int(GetSystemMetrics(1) / 2 - 240))
 
-
     im = cv2.imread("imgs/config.jpg")
 
-    roiMotion = cv2.selectROI(winname,im)
+    roiMotion = cv2.selectROI(winname, im)
 
     config.set('roi', 'region', str(roiMotion))
     with open('config.ini', 'w') as f:
