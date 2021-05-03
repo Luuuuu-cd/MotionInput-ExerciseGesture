@@ -18,6 +18,8 @@ from tqdm import tqdm
 
 matplotlib.style.use('ggplot')
 
+# This code is based on this tutorial with some modifications:
+# https://debuggercafe.com/action-recognition-in-videos-using-deep-learning-and-pytorch/
 
 class ImageDataset(Dataset):
     def __init__(self, images, labels=None, tfms=None):
